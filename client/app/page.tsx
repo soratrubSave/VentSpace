@@ -1,178 +1,46 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { v4 as uuidv4 } from 'uuid'; // อย่าลืม npm install uuid
-
-// --- Types ---
-type Mood = 'sad' | 'angry' | 'stressed' | 'happy' | 'confused' | 'neutral';
-type PostMode = 'vent' | 'advice';
-
-const moodLabelMap: Record<Mood, string> = {
-  sad: '😢 เหงา',
-  angry: '😡 หงุดหงิด',
-  stressed: '😰 เครียด',
-  happy: '😊 ดีใจ',
-  confused: '🤔 สับสน',
-  neutral: '🌌 ปกติ',
-};
-
-interface Comment {
-  text: string;
-  userId: string;
-  timestamp: string;
-}
-
-interface Vote {
-  userId: string;
-  type: 'agree' | 'disagree';
-}
-
-interface Topic {
-  _id: string;
-  content: string;
-  mood: Mood;
-  mode: PostMode;
-  userId: string;
-  votes: Vote[]; // รับ array votes มาด้วยเพื่อเช็ค status ตัวเอง
-  agreeCount: number; // รับค่าที่คำนวณแล้วจาก server
-  disagreeCount: number; // รับค่าที่คำนวณแล้วจาก server
-  comments: Comment[];
-  createdAt: string;
-  reportCount: number;
-  // optional flag จาก server เวลาโดนลบ
-  deleted?: boolean;
-}
-
-let socket: Socket;
-
-// Helper function to format time
-const formatTimeAgo = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
-  if (diffInSeconds < 60) return 'just now';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-  
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
-
-// สร้าง nickname แบบ deterministic จาก userId
-const nicknames = [
-  'Nebula Fox',
-  'Silent Comet',
-  'Midnight Echo',
-  'Crystal Wave',
-  'Lunar Breeze',
-  'Hidden Aurora',
-  'Binary Ghost',
-  'Velvet Storm',
-  'Pixel Whisper',
-  'Quantum Cloud',
-];
-
-const avatarEmojis = ['🦊', '🐱', '🐼', '🐧', '🐋', '🦉', '🐺', '🐢', '🦄', '🐇'];
-
-const getNicknameFromUserId = (id: string) => {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  }
-  const index = hash % nicknames.length;
-  const emoji = avatarEmojis[hash % avatarEmojis.length];
-  return { name: nicknames[index], emoji };
-};
+import { useState, useRef } from 'react';
+import type { Mood, PostMode, Topic } from './types';
+import { useSocket } from './hooks/useSocket';
+import { moodLabelMap, nicknames, avatarEmojis } from './utils/constants';
+import { formatTimeAgo, getNicknameFromUserId } from './utils/helpers';
 
 export default function Home() {
-  const [topics, setTopics] = useState<Topic[]>([]);
+  const { topics, setTopics, userId, isLoading, isConnected, error, emit } = useSocket();
   const [newTopicInput, setNewTopicInput] = useState('');
   const [commentInputs, setCommentInputs] = useState<{ [key: string]: string }>({});
-  const [userId, setUserId] = useState<string>(''); // Identity ของเรา
   const [selectedMood, setSelectedMood] = useState<Mood>('neutral');
   const [activeMoodFilter, setActiveMoodFilter] = useState<Mood | 'all'>('all');
   const [selectedMode, setSelectedMode] = useState<PostMode>('vent');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   
   const chatContainerRef = useRef<{ [key: string]: HTMLDivElement | null }>({});
-
-  useEffect(() => {
-    // 1. Identify User (สร้าง ID ถ้ายังไม่มี)
-    let storedId = localStorage.getItem('vent_user_id');
-    if (!storedId) {
-      storedId = uuidv4();
-      localStorage.setItem('vent_user_id', storedId);
-    }
-    setUserId(storedId);
-
-    // 2. Connect Socket
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    socket = io(apiUrl);
-
-    socket.on('connect', () => {
-      console.log('Connected to Cyber Space');
-      setIsConnected(true);
-    });
-
-    socket.on('disconnect', () => {
-      setIsConnected(false);
-    });
-
-    socket.on('load_topics', (data: Topic[]) => {
-      setTopics(data);
-      setIsLoading(false);
-    });
-
-    socket.on('new_topic', (topic: Topic) => {
-      setTopics(prev => [topic, ...prev]);
-      setError(null);
-    });
-    
-    socket.on('update_topic', (updatedTopic: Topic) => {
-      setTopics(prev => prev.map(t => t._id === updatedTopic._id ? updatedTopic : t));
-    });
-
-    socket.on('error', (data: { message: string }) => {
-      setError(data.message);
-      setTimeout(() => setError(null), 5000);
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
 
   // Actions
   const handleCreateTopic = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTopicInput.trim() || !userId) return;
-    socket.emit('create_topic', { content: newTopicInput, mood: selectedMood, mode: selectedMode, userId });
+    emit('create_topic', { content: newTopicInput, mood: selectedMood, mode: selectedMode, userId });
     setNewTopicInput('');
     setSelectedMood('neutral');
     setSelectedMode('vent');
   };
 
   const handleVote = (topicId: string, type: 'agree' | 'disagree') => {
-    if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
-    // ส่ง userId ไปด้วยเพื่อให้ Server รู้ว่าใครกด
-    socket.emit('vote_topic', { topicId, type, userId });
+    if (navigator.vibrate) navigator.vibrate(50);
+    emit('vote_topic', { topicId, type, userId });
   };
 
   const handleComment = (e: React.FormEvent, topicId: string) => {
     e.preventDefault();
     const text = commentInputs[topicId];
     if (!text?.trim()) return;
-    socket.emit('comment_topic', { topicId, text, userId });
+    emit('comment_topic', { topicId, text, userId });
     setCommentInputs(prev => ({ ...prev, [topicId]: '' }));
     
-    // Scroll ลงล่างสุดเมื่อคอมเมนต์
     setTimeout(() => {
-        const container = chatContainerRef.current[topicId];
-        if (container) container.scrollTop = container.scrollHeight;
+      const container = chatContainerRef.current[topicId];
+      if (container) container.scrollTop = container.scrollHeight;
     }, 100);
   };
 
@@ -180,9 +48,7 @@ export default function Home() {
     if (!userId || userId !== ownerId) return;
     const confirmDelete = window.confirm('คุณต้องการลบโพสต์นี้จริง ๆ ไหม?');
     if (!confirmDelete) return;
-    socket.emit('delete_topic', { topicId, userId });
-
-    // Optimistic update: เอาออกจาก state ทันที
+    emit('delete_topic', { topicId, userId });
     setTopics(prev => prev.filter(t => t._id !== topicId));
   };
 
@@ -190,7 +56,7 @@ export default function Home() {
     if (!userId) return;
     const confirmReport = window.confirm('รายงานโพสต์นี้ว่าไม่เหมาะสมใช่ไหม?');
     if (!confirmReport) return;
-    socket.emit('report_topic', { topicId, userId });
+    emit('report_topic', { topicId, userId });
   };
 
   return (
@@ -386,7 +252,7 @@ export default function Home() {
                     {topic.userId !== userId && (
                       <p className="text-[10px] font-mono text-gray-500 mt-1">
                         {(() => {
-                          const { name } = getNicknameFromUserId(topic.userId);
+                          const { name } = getNicknameFromUserId(topic.userId, nicknames, avatarEmojis);
                           return `@${name}`;
                         })()}
                       </p>
@@ -498,7 +364,7 @@ export default function Home() {
                   )}
                   {topic.comments.map((comment, idx) => {
                     const isMe = comment.userId === userId;
-                    const { name, emoji } = getNicknameFromUserId(comment.userId);
+                    const { name, emoji } = getNicknameFromUserId(comment.userId, nicknames, avatarEmojis);
                     return (
                       <div key={idx} className="flex gap-3 text-sm group animate-fade-in-up">
                         <div className="w-1 h-auto bg-gray-800 rounded-full group-hover:bg-cyan-500 transition-colors"></div>
