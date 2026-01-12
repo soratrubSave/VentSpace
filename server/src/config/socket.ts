@@ -10,7 +10,7 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
 export const createSocketServer = (server: http.Server) => {
   return new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: {
-      origin: CLIENT_ORIGIN,
+      origin: process.env.CLIENT_URL || "*",
       methods: ["GET", "POST"]
     }
   });
