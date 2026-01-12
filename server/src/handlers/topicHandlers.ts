@@ -1,6 +1,6 @@
 import { Socket } from 'socket.io';
-import type { ServerToClientEvents } from '../types';
-import { TopicService } from '../services/topicService';
+import type { ServerToClientEvents } from '../types/index.js';
+import { TopicService } from '../services/topicService.js';
 
 export class TopicHandlers {
   constructor(private io: Socket<ServerToClientEvents>) {}

@@ -1,12 +1,18 @@
-import { Topic } from '../models/Topic';
-import type { ITopic, Mood, PostMode } from '../types';
-import { validateContent, validateComment, validateUserId, sanitizeMood, sanitizeMode } from '../utils/validation';
+import { Topic } from '../models/Topic.js';
+import type { ITopic, Mood, PostMode } from '../types/index.js';
+import type { ITopicDocument } from '../models/Topic.js';
+import { validateContent, validateComment, validateUserId, sanitizeMood, sanitizeMode } from '../utils/validation.js';
 
 export class TopicService {
+  private static toTopic(doc: ITopicDocument): ITopic {
+    const obj = doc.toObject();
+    return { ...obj, _id: doc._id.toString() };
+  }
+
   static async getRecentTopics(limit: number = 20): Promise<ITopic[]> {
     try {
       const topics = await Topic.find().sort({ createdAt: -1 }).limit(limit);
-      return topics;
+      return topics.map(TopicService.toTopic);
     } catch (err) {
       console.error('Error fetching topics:', err);
       throw err;
@@ -42,7 +48,7 @@ export class TopicService {
     });
 
     await newTopic.save();
-    return newTopic.toObject();
+    return TopicService.toTopic(newTopic);
   }
 
   static async voteTopic(topicId: string, userId: string, type: 'agree' | 'disagree'): Promise<ITopic | null> {
@@ -67,7 +73,7 @@ export class TopicService {
     }
 
     await topic.save();
-    return topic.toObject();
+    return TopicService.toTopic(topic);
   }
 
   static async addComment(topicId: string, text: string, userId: string): Promise<ITopic | null> {
@@ -87,7 +93,7 @@ export class TopicService {
       { new: true }
     );
 
-    return updatedTopic ? updatedTopic.toObject() : null;
+    return updatedTopic ? TopicService.toTopic(updatedTopic) : null;
   }
 
   static async deleteTopic(topicId: string, userId: string): Promise<{ success: boolean; error?: string }> {
@@ -121,6 +127,6 @@ export class TopicService {
       { new: true }
     );
 
-    return topic ? topic.toObject() : null;
+    return topic ? TopicService.toTopic(topic) : null;
   }
 }

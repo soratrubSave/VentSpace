@@ -1,11 +1,11 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import type { ITopic, Mood, PostMode, VoteType } from '../types';
+import type { ITopic, Mood, PostMode, VoteType } from '../types/index.js';
 
-export interface ITopicDocument extends ITopic, Document {}
+export interface ITopicDocument extends Document, Omit<ITopic, '_id'> {}
 
 const voteSchema = new Schema({
   userId: { type: String, required: true },
-  type: { type: String, enum: ['agree', 'disagree'] as VoteType[], required: true }
+  type: { type: String, enum: ['agree', 'disagree'], required: true }
 }, { _id: false });
 
 const commentSchema = new Schema({

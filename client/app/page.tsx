@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import type { Mood, PostMode, Topic } from './types';
+import type { Mood, PostMode } from './types';
 import { useSocket } from './hooks/useSocket';
 import { moodLabelMap, nicknames, avatarEmojis } from './utils/constants';
 import { formatTimeAgo, getNicknameFromUserId } from './utils/helpers';

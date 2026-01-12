@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import http from 'http';
 import dotenv from 'dotenv';
-import type { ClientToServerEvents, ServerToClientEvents } from '../types';
+import type { ClientToServerEvents, ServerToClientEvents } from '../types/index.js';
 
 dotenv.config();
 

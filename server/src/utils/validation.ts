@@ -1,4 +1,4 @@
-import type { Mood, PostMode } from '../types';
+import type { Mood, PostMode } from '../types/index.js';
 
 export const validateContent = (content: string): { valid: boolean; error?: string } => {
   const trimmed = content?.trim() || '';
