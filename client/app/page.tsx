@@ -102,7 +102,7 @@ export default function Home() {
           VENT<span className="text-cyan-400">SPACE</span>
         </h1>
         <div className="h-1 w-24 bg-gradient-to-r from-purple-500 to-cyan-500 mx-auto rounded-full mb-4"></div>
-        <p className="text-gray-400 font-mono text-sm tracking-wider opacity-80 italic">
+        <p className="text-gray-400 font-mono text-sm tracking-wider opacity-80">
         Let it out. Let it heal.
         </p>
         <div className="mt-4 flex items-center justify-center gap-2">
