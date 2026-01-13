@@ -12,7 +12,7 @@ export const useSocket = () => {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Initialize userId
+    // Initialize userId - Each browser/device gets unique ID
     let storedId = localStorage.getItem('vent_user_id');
     if (!storedId) {
       storedId = uuidv4();
@@ -26,7 +26,6 @@ export const useSocket = () => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('Connected to Cyber Space');
       setIsConnected(true);
     });
 

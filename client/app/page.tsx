@@ -5,6 +5,7 @@ import type { Mood, PostMode } from './types';
 import { useSocket } from './hooks/useSocket';
 import { moodLabelMap, nicknames, avatarEmojis } from './utils/constants';
 import { formatTimeAgo, getNicknameFromUserId } from './utils/helpers';
+import ConfirmModal from './components/ConfirmModal';
 
 export default function Home() {
   const { topics, setTopics, userId, isLoading, isConnected, error, emit } = useSocket();
@@ -13,6 +14,17 @@ export default function Home() {
   const [selectedMood, setSelectedMood] = useState<Mood>('neutral');
   const [activeMoodFilter, setActiveMoodFilter] = useState<Mood | 'all'>('all');
   const [selectedMode, setSelectedMode] = useState<PostMode>('vent');
+  
+  // Modal states
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; topicId: string; ownerId: string }>({
+    isOpen: false,
+    topicId: '',
+    ownerId: ''
+  });
+  const [reportModal, setReportModal] = useState<{ isOpen: boolean; topicId: string }>({
+    isOpen: false,
+    topicId: ''
+  });
   
   const chatContainerRef = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -44,19 +56,36 @@ export default function Home() {
     }, 100);
   };
 
-  const handleDeleteTopic = (topicId: string, ownerId: string) => {
-    if (!userId || userId !== ownerId) return;
-    const confirmDelete = window.confirm('คุณต้องการลบโพสต์นี้จริง ๆ ไหม?');
-    if (!confirmDelete) return;
-    emit('delete_topic', { topicId, userId });
-    setTopics(prev => prev.filter(t => t._id !== topicId));
+  const handleDeleteClick = (topicId: string, ownerId: string) => {
+    setDeleteModal({ isOpen: true, topicId, ownerId });
   };
 
-  const handleReportTopic = (topicId: string) => {
+  const handleDeleteConfirm = () => {
+    if (!deleteModal.topicId || !userId || !deleteModal.ownerId) return;
+    
+    // Double-check ownership before deleting
+    const normalizedUserId = String(userId).trim();
+    const normalizedOwnerId = String(deleteModal.ownerId).trim();
+    
+    if (normalizedUserId !== normalizedOwnerId) {
+      setDeleteModal({ isOpen: false, topicId: '', ownerId: '' });
+      return;
+    }
+    
+    emit('delete_topic', { topicId: deleteModal.topicId, userId: normalizedUserId });
+    setTopics(prev => prev.filter(t => t._id !== deleteModal.topicId));
+    setDeleteModal({ isOpen: false, topicId: '', ownerId: '' });
+  };
+
+  const handleReportClick = (topicId: string) => {
     if (!userId) return;
-    const confirmReport = window.confirm('รายงานโพสต์นี้ว่าไม่เหมาะสมใช่ไหม?');
-    if (!confirmReport) return;
-    emit('report_topic', { topicId, userId });
+    setReportModal({ isOpen: true, topicId });
+  };
+
+  const handleReportConfirm = () => {
+    if (!userId) return;
+    emit('report_topic', { topicId: reportModal.topicId, userId });
+    setReportModal({ isOpen: false, topicId: '' });
   };
 
   return (
@@ -73,8 +102,8 @@ export default function Home() {
           VENT<span className="text-cyan-400">SPACE</span>
         </h1>
         <div className="h-1 w-24 bg-gradient-to-r from-purple-500 to-cyan-500 mx-auto rounded-full mb-4"></div>
-        <p className="text-gray-400 font-mono text-sm tracking-widest uppercase opacity-70">
-          Anonymous Protocol v2.0 • Encryption Level: Maximum
+        <p className="text-gray-400 font-mono text-sm tracking-wider opacity-80 italic">
+        Let it out. Let it heal.
         </p>
         <div className="mt-4 flex items-center justify-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
@@ -176,7 +205,10 @@ export default function Home() {
               </div>
 
               <div className="flex justify-between items-center border-t border-gray-800 pt-4">
-                <span className="text-xs text-gray-500 font-mono">ID: {userId.slice(0, 8)}...</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-gray-500 font-mono">Your ID: {userId.slice(0, 8)}...</span>
+                  <span className="text-[10px] text-gray-600 font-mono">(Each browser has unique ID)</span>
+                </div>
                 <button
                   type="submit"
                   disabled={!newTopicInput.trim()}
@@ -231,8 +263,8 @@ export default function Home() {
           .filter((topic) => !topic.deleted)
           .filter((topic) => (activeMoodFilter === 'all' ? true : topic.mood === activeMoodFilter))
           .map((topic) => {
-          // Check Voting Status
-          const myVote = topic.votes.find(v => v.userId === userId)?.type;
+          // Check Voting Status (normalize userId comparison)
+          const myVote = userId ? topic.votes.find(v => String(v.userId) === String(userId))?.type : undefined;
 
           return (
             <div key={topic._id} className="bg-[#0e0e12] border border-gray-800/50 rounded-2xl overflow-hidden hover:border-gray-700 transition-colors duration-300 shadow-xl">
@@ -244,12 +276,12 @@ export default function Home() {
                     <p className="text-xs font-mono text-gray-500">
                       {formatTimeAgo(topic.createdAt)}
                     </p>
-                    {topic.userId === userId && (
+                    {userId && topic.userId && String(topic.userId) === String(userId) && (
                       <p className="text-[10px] font-mono text-cyan-500 mt-1">
                         YOU
                       </p>
                     )}
-                    {topic.userId !== userId && (
+                    {(!userId || !topic.userId || String(topic.userId) !== String(userId)) && (
                       <p className="text-[10px] font-mono text-gray-500 mt-1">
                         {(() => {
                           const { name } = getNicknameFromUserId(topic.userId, nicknames, avatarEmojis);
@@ -269,19 +301,19 @@ export default function Home() {
                         {topic.reportCount} reports
                       </span>
                     )}
-                    {topic.userId === userId && (
+                    {userId && topic.userId && String(topic.userId).trim() === String(userId).trim() && (
                       <button
                         type="button"
-                        onClick={() => handleDeleteTopic(topic._id, topic.userId)}
+                        onClick={() => handleDeleteClick(topic._id, topic.userId)}
                         className="text-[11px] font-mono text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-500/40 hover:border-red-400/80 bg-red-900/10 hover:bg-red-900/20 transition-colors"
                       >
                         DELETE
                       </button>
                     )}
-                    {topic.userId !== userId && (
+                    {(!userId || !topic.userId || String(topic.userId) !== String(userId)) && (
                       <button
                         type="button"
-                        onClick={() => handleReportTopic(topic._id)}
+                        onClick={() => handleReportClick(topic._id)}
                         className="text-[11px] font-mono text-gray-500 hover:text-orange-300 px-2 py-1 rounded border border-gray-700 hover:border-orange-400 bg-[#111118] hover:bg-[#1c1c24] transition-colors"
                       >
                         REPORT
@@ -411,6 +443,31 @@ export default function Home() {
         })}
       </div>
 
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="ลบโพสต์"
+        message="คุณต้องการลบโพสต์นี้จริง ๆ ไหม? การกระทำนี้ไม่สามารถยกเลิกได้"
+        confirmText="ลบ"
+        cancelText="ยกเลิก"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteModal({ isOpen: false, topicId: '', ownerId: '' })}
+      />
+
+      {/* Report Confirmation Modal */}
+      <ConfirmModal
+        isOpen={reportModal.isOpen}
+        title="รายงานโพสต์"
+        message={reportModal.topicId 
+          ? "คุณต้องการรายงานโพสต์นี้ว่ามีเนื้อหาไม่เหมาะสมใช่ไหม?"
+          : "คุณไม่มีสิทธิ์ลบโพสต์นี้"}
+        confirmText={reportModal.topicId ? "รายงาน" : "เข้าใจแล้ว"}
+        cancelText="ยกเลิก"
+        variant={reportModal.topicId ? "warning" : "default"}
+        onConfirm={reportModal.topicId ? handleReportConfirm : () => setReportModal({ isOpen: false, topicId: '' })}
+        onCancel={() => setReportModal({ isOpen: false, topicId: '' })}
+      />
     </main>
   );
 }

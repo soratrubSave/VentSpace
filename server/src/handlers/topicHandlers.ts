@@ -43,9 +43,12 @@ export class TopicHandlers {
       const updatedTopic = await TopicService.voteTopic(data.topicId, data.userId, data.type);
       if (updatedTopic) {
         this.io.emit('update_topic', updatedTopic);
+      } else {
+        socket.emit('error', { message: 'Topic not found' });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Vote error:', err);
+      socket.emit('error', { message: err.message || 'Failed to vote' });
     }
   }
 

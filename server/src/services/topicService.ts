@@ -6,7 +6,23 @@ import { validateContent, validateComment, validateUserId, sanitizeMood, sanitiz
 export class TopicService {
   private static toTopic(doc: ITopicDocument): ITopic {
     const obj = doc.toObject();
-    return { ...obj, _id: doc._id.toString() };
+    const topic = {
+      ...obj,
+      _id: doc._id?.toString() || '',
+    } as any;
+    
+    // Convert dates to ISO strings for client
+    if (topic.createdAt instanceof Date) {
+      topic.createdAt = topic.createdAt.toISOString();
+    }
+    if (topic.comments && Array.isArray(topic.comments)) {
+      topic.comments = topic.comments.map((c: any) => ({
+        ...c,
+        timestamp: c.timestamp instanceof Date ? c.timestamp.toISOString() : c.timestamp
+      }));
+    }
+    
+    return topic as ITopic;
   }
 
   static async getRecentTopics(limit: number = 20): Promise<ITopic[]> {
@@ -52,10 +68,17 @@ export class TopicService {
   }
 
   static async voteTopic(topicId: string, userId: string, type: 'agree' | 'disagree'): Promise<ITopic | null> {
+    const userIdValidation = validateUserId(userId);
+    if (!userIdValidation.valid) {
+      throw new Error(userIdValidation.error);
+    }
+
     const topic = await Topic.findById(topicId);
     if (!topic) return null;
 
-    const existingVoteIndex = topic.votes.findIndex(v => v.userId === userId);
+    // Normalize userId for comparison
+    const normalizedUserId = String(userId).trim();
+    const existingVoteIndex = topic.votes.findIndex(v => String(v.userId).trim() === normalizedUserId);
 
     if (existingVoteIndex !== -1) {
       const existingVote = topic.votes[existingVoteIndex];
@@ -69,7 +92,7 @@ export class TopicService {
       }
     } else {
       // Add new vote
-      topic.votes.push({ userId, type });
+      topic.votes.push({ userId: normalizedUserId, type });
     }
 
     await topic.save();
@@ -102,12 +125,20 @@ export class TopicService {
       return { success: false, error: userIdValidation.error };
     }
 
+    if (!topicId || topicId.trim().length === 0) {
+      return { success: false, error: 'Topic ID is required' };
+    }
+
     const topic = await Topic.findById(topicId);
     if (!topic) {
       return { success: false, error: 'Topic not found' };
     }
 
-    if (topic.userId !== userId) {
+    // Strict ownership check: Normalize strings and compare
+    const topicOwnerId = String(topic.userId || '').trim();
+    const requestUserId = String(userId || '').trim();
+    
+    if (topicOwnerId !== requestUserId) {
       return { success: false, error: 'You can only delete your own posts' };
     }
 
