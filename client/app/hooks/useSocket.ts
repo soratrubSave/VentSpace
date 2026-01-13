@@ -13,12 +13,16 @@ export const useSocket = () => {
 
   useEffect(() => {
     // Initialize userId - Each browser/device gets unique ID
-    let storedId = localStorage.getItem('vent_user_id');
-    if (!storedId) {
-      storedId = uuidv4();
-      localStorage.setItem('vent_user_id', storedId);
-    }
-    setUserId(storedId);
+    const initializeUserId = () => {
+      let storedId = localStorage.getItem('vent_user_id');
+      if (!storedId) {
+        storedId = uuidv4();
+        localStorage.setItem('vent_user_id', storedId);
+      }
+      setUserId(storedId);
+    };
+    
+    initializeUserId();
 
     // Connect Socket
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -43,11 +47,11 @@ export const useSocket = () => {
       setError(null);
     });
 
-    socket.on('update_topic', (updatedTopic: Topic) => {
+    socket.on('update_topic', (updatedTopic: Topic & { deleted?: boolean }) => {
       setTopics(prev => {
         // Handle deleted topics
-        if ((updatedTopic as any).deleted) {
-          return prev.filter(t => t._id !== (updatedTopic as any)._id);
+        if (updatedTopic.deleted) {
+          return prev.filter(t => t._id !== updatedTopic._id);
         }
         // Update existing topic or add new one
         const existingIndex = prev.findIndex(t => t._id === updatedTopic._id);
@@ -68,9 +72,9 @@ export const useSocket = () => {
     };
   }, []);
 
-  const emit = (event: string, data: any) => {
+  const emit = (event: string, data: unknown) => {
     if (socketRef.current) {
-      socketRef.current.emit(event as any, data);
+      socketRef.current.emit(event, data);
     }
   };
 
