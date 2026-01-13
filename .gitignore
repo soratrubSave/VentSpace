@@ -48,3 +48,7 @@ mysql-data/
 
 # --- TypeScript ---
 *.tsbuildinfo
+
+# --- Testing ---
+coverage/
+*.lcov
